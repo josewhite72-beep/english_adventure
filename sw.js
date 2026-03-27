@@ -1,4 +1,4 @@
-const CACHE = 'english-quest-v3';
+const CACHE = 'english-quest-v6';
 const ASSETS = [
   './',
   './index.html',
