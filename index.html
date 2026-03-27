@@ -672,8 +672,8 @@ let edTab='meta',edSi=0,edState=null;
 const clone=o=>JSON.parse(JSON.stringify(o));
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function storeKey(){return `eq_story_${sel.grade}_sc${sel.scenario}_th${sel.theme}`;}
-function saveStory(){if(story)localStorage.setItem(storeKey(),JSON.stringify(story));}
-function loadSaved(){try{const s=localStorage.getItem(storeKey());return s?JSON.parse(s):null;}catch{return null;}}
+function saveStory(){} // cache disabled — always generate fresh
+function loadSaved(){return null;} // cache disabled — always generate fresh
 
 /* ════════════════════════════════════════════════
    RENDER ROUTER
@@ -766,10 +766,14 @@ function renderScene(){
   const charSVG=renderCharSVG(charKey);
   const groundColor=STAGE_GROUNDS[sc.bannerColor]||'#c8d8a8';
   const L=['A','B','C'];
-  const opts=sc.options.map((o,i)=>`
-    <button class="opt-btn" onclick="choose(${i})">
+  // Shuffle options but keep track of original indices for correct answer
+  const shuffled=sc.options.map((o,i)=>({...o,origIdx:i})).sort(()=>Math.random()-.5);
+  const opts=shuffled.map((o,i)=>`
+    <button class="opt-btn" onclick="choose(${i},${JSON.stringify(o).replace(/"/g,'&quot;')})">
       <span class="opt-letter">${L[i]}</span><span>${o.text}</span>
     </button>`).join('');
+  // Store shuffled order for this scene
+  window._shuffled=shuffled;
   const cleanDialogue=stripHTML(sc.dialogue);
   return`<div class="scene-card">
     <!-- STAGE -->
@@ -849,7 +853,9 @@ function choose(i){
   if(gs.answered)return;
   gs.answered=true;
   stopSpeech();
-  const sc=story.scenes[gs.si],opt=sc.options[i];
+  const sc=story.scenes[gs.si];
+  // Use shuffled order if available
+  const opt=(window._shuffled||sc.options)[i];
   const btns=document.querySelectorAll('.opt-btn');
   btns.forEach(b=>b.disabled=true);
   if(opt.correct){
@@ -863,7 +869,7 @@ function choose(i){
     setTimeout(()=>hideBubble(),2200);
   } else {
     btns[i].classList.add('wrong');
-    sc.options.forEach((o,j)=>{if(o.correct)btns[j].classList.add('correct');});
+    (window._shuffled||sc.options).forEach((o,j)=>{if(o.correct)btns[j].classList.add('correct');});
     document.getElementById('fb').className='feedback bad show';
     setCharAnim('shake');
     sfxWrong();
@@ -906,7 +912,7 @@ async function startGeneration(){
 
   const prompt=`You are an ESL curriculum game designer for Panama schools (${sel.grade}).
 
-Create a 4-scene interactive adventure based on:
+Create a 10-scene interactive adventure based on:
 - Grade: ${sel.grade}  
 - Scenario ${sel.scenario}: "${sc.title}"
 - Theme: "${theme}"
@@ -937,15 +943,17 @@ Return ONLY valid JSON (no markdown, no backticks):
 }
 
 RULES:
-- All 4 scenes must feel like a connected story set in the world of "${theme}"
+- All 10 scenes must feel like a connected story set in the world of "${theme}"
 - Characters: use relatable Panamanian school/community roles (teacher, classmate, shopkeeper, parent, friend)
 - Language must match EXACTLY the level: ${levelDesc}
 - Each bannerColor must be different and soft (light pastels)
-- Correct answer is always index 0 (option A)
+- Correct answer is always index 0 (option A) — the app will shuffle display order automatically
 - Feedback must teach, not just label correct/wrong`;
 
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    // Proxy URL — update with your actual Vercel deployment URL
+    const PROXY_URL = 'https://eq-proxy.vercel.app/api/anthropic';
+    const res=await fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2500,messages:[{role:'user',content:prompt}]})});
     if(!res.ok) throw new Error('API '+res.status+': '+res.statusText);
     const data=await res.json();
     if(data.error) throw new Error('API error: '+data.error.message);
@@ -1092,6 +1100,8 @@ if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.se
 window.speechSynthesis?.getVoices();
 window.speechSynthesis?.addEventListener('voiceschanged',()=>{});
 
+// Clear old cached stories on every boot
+localStorage.clear();
 render();
 </script>
 </body>
