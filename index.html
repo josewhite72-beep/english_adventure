@@ -953,7 +953,7 @@ RULES:
   try{
     // Proxy URL — update with your actual Vercel deployment URL
     const PROXY_URL = 'https://eq-proxy.vercel.app/api/anthropic';
-    const res=await fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:2500,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'deepseek-chat',max_tokens:2500,messages:[{role:'user',content:prompt}]})});
     if(!res.ok) throw new Error('API '+res.status+': '+res.statusText);
     const data=await res.json();
     if(data.error) throw new Error('API error: '+data.error.message);
